@@ -2,6 +2,8 @@
 
 This repository is used for the CI/CD module of the Full Stack Open course
 
+testing things
+
 ## Deployed application
 
 The application is deployed on Render: https://fs-pokedex-yhgv.onrender.com
