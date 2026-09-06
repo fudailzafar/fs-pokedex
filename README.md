@@ -8,6 +8,8 @@ testing things
 
 The application is deployed on Render: https://fs-pokedex-yhgv.onrender.com
 
+Source repository: https://github.com/fudailzafar/fs-pokedex
+
 ## Commands
 
 Start by running `npm install` inside the project folder
