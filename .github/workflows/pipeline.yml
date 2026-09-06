@@ -43,7 +43,7 @@ jobs:
         if: >-
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main' &&
-          !contains(join(github.event.commits), '#skip')
+          !contains(toJSON(github.event.commits), '#skip')
         run: curl -fsS "$RENDER_DEPLOY_HOOK"
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
@@ -66,3 +66,37 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BUMP: patch
           DEFAULT_BRANCH: main
+
+  notify:
+    needs: [simple_deployment_pipeline, tag_release]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify successful deployment
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          needs.simple_deployment_pipeline.result == 'success' &&
+          needs.tag_release.result == 'success'
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: Success
+          title: Deployment succeeded
+          description: >-
+            A new version was deployed from commit
+            [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}).
+
+      - name: Notify failed build
+        if: >-
+          needs.simple_deployment_pipeline.result == 'failure' ||
+          needs.tag_release.result == 'failure'
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: Failure
+          title: CI pipeline failed
+          description: >-
+            The pipeline failed for commit
+            [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}).
+            Check the workflow logs for the failing step.
