@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  simple_deployment_pipeline:
+  quality_checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -33,23 +33,39 @@ jobs:
       - name: Run npm build
         run: npm run build
 
+  e2e_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: npm install
+
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
         run: npm run test:e2e
 
+  deploy:
+    needs: [quality_checks, e2e_tests]
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      !contains(toJSON(github.event.commits), '#skip')
+    runs-on: ubuntu-latest
+    steps:
       - name: Trigger Render Deployment
-        if: >-
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main' &&
-          !contains(toJSON(github.event.commits), '#skip')
         run: curl -fsS "$RENDER_DEPLOY_HOOK"
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
 
   tag_release:
-    needs: [simple_deployment_pipeline]
+    needs: [deploy]
     if: >-
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
@@ -68,7 +84,7 @@ jobs:
           DEFAULT_BRANCH: main
 
   notify:
-    needs: [simple_deployment_pipeline, tag_release]
+    needs: [quality_checks, e2e_tests, deploy, tag_release]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -76,7 +92,9 @@ jobs:
         if: >-
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main' &&
-          needs.simple_deployment_pipeline.result == 'success' &&
+          needs.quality_checks.result == 'success' &&
+          needs.e2e_tests.result == 'success' &&
+          needs.deploy.result == 'success' &&
           needs.tag_release.result == 'success'
         uses: sarisia/actions-status-discord@v1
         with:
@@ -89,7 +107,9 @@ jobs:
 
       - name: Notify failed build
         if: >-
-          needs.simple_deployment_pipeline.result == 'failure' ||
+          needs.quality_checks.result == 'failure' ||
+          needs.e2e_tests.result == 'failure' ||
+          needs.deploy.result == 'failure' ||
           needs.tag_release.result == 'failure'
         uses: sarisia/actions-status-discord@v1
         with:
